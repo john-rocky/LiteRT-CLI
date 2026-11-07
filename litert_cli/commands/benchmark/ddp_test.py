@@ -958,6 +958,58 @@ class RunDdpTest(absltest.TestCase):
     self.assertIn("gcloud beta device-run devices list", result.output)
     self.assertEqual(fake.events, ["post"])
 
+  def test_403_exits_1_without_the_device_hint(self):
+    def error_body(reason: str, message: str) -> bytes:
+      # Like the real bodies, these contain "device" through the service name.
+      info = {
+          "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+          "reason": reason,
+          "domain": "googleapis.com",
+          "metadata": {"service": "devicerun.googleapis.com"},
+      }
+      error = {
+          "code": 403,
+          "message": message,
+          "status": "PERMISSION_DENIED",
+          "details": [info],
+      }
+      return json.dumps({"error": error}).encode()
+
+    fake = _FakeCloud(
+        create_response=_http_error(
+            403,
+            error_body(
+                "SERVICE_DISABLED",
+                "Device Run API has not been used in project p before or it is"
+                " disabled.",
+            ),
+        )
+    )
+    result = self._invoke(fake)
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("Error: Failed to submit benchmark: 403", result.output)
+    self.assertIn(
+        "gcloud services enable devicerun.googleapis.com --project p",
+        result.output,
+    )
+    self.assertNotIn("gcloud beta device-run devices list", result.output)
+    self.assertEqual(fake.events, ["post"])
+
+    fake = _FakeCloud(
+        create_response=_http_error(
+            403,
+            error_body(
+                "CONSUMER_INVALID", "Permission denied on resource project p."
+            ),
+        )
+    )
+    result = self._invoke(fake)
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("Error: Failed to submit benchmark: 403", result.output)
+    self.assertNotIn("gcloud services enable", result.output)
+    self.assertNotIn("gcloud beta device-run devices list", result.output)
+    self.assertEqual(fake.events, ["post"])
+
   def test_operation_error_exits_1(self):
     fake = _FakeCloud([{
         "name": "op-1",

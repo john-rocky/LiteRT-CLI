@@ -1320,7 +1320,12 @@ def run_ddp(
     except (OSError, http.client.HTTPException):
       err_body = ""
     message = f"Failed to submit benchmark: {e.code} {e.reason}\n{err_body}"
-    if e.code in (400, 404) or "device" in err_body.lower():
+    if "SERVICE_DISABLED" in err_body:
+      message += (
+          "\nEnable the Device Run API with: gcloud services enable"
+          f" devicerun.googleapis.com --project {gcp_project}"
+      )
+    elif e.code in (400, 404):
       message += f"\n{_DEVICE_LIST_HINT}"
     raise click.ClickException(message) from e
   except (OSError, http.client.HTTPException, json.JSONDecodeError) as e:
